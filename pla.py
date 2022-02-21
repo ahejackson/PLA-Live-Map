@@ -1,6 +1,32 @@
 from math import factorial
 from xoroshiro import XOROSHIRO
 
+def slot_to_pokemon(values, slot):
+    """Compare slot to list of slots to find pokemon"""
+    for pokemon,slot_value in values.items():
+        if slot <= slot_value:
+            return pokemon
+        slot -= slot_value
+    return None
+
+def find_slots(time, weather, sp_slots):
+    """Get slots based on sp_slots, time, and weather"""
+    for time_weather, values in sp_slots.items():
+        slot_time,slot_weather = time_weather.split("/")
+        if (slot_time in ("Any Time", time)) and (slot_weather in ("All Weather", weather)):
+            return values
+    return None
+
+def find_slot_range(time, weather, species, sp_slots):
+    """Find slot range of a species for a spawner"""
+    values = find_slots(time,weather,sp_slots)
+    pokemon = list(values.keys())
+    slot_values = list(values.values())
+    if not species in pokemon:
+        return 0,0,0
+    start = sum(slot_values[:pokemon.index(species)])
+    end = start + values[species]
+    return start,end,sum(slot_values)
 
 def generate_from_seed(seed, rolls, guaranteed_ivs):
     """Generate pokemon information from a fixed seed (FixInitSpec)"""

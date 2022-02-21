@@ -96,39 +96,7 @@ def load_map(name):
                            custom_markers=json.dumps(CUSTOM_MARKERS[name]),
                            slots=slots)
 
-def slot_to_pokemon(values,slot):
-    """Compare slot to list of slots to find pokemon"""
-    for pokemon,slot_value in values.items():
-        if slot <= slot_value:
-            return pokemon
-        slot -= slot_value
-    return None
-
-def find_slots(time,weather,sp_slots):
-    """Get slots based on sp_slots, time, and weather"""
-    for time_weather, values in sp_slots.items():
-        slot_time,slot_weather = time_weather.split("/")
-        if (slot_time in ("Any Time", time)) and (slot_weather in ("All Weather", weather)):
-            return values
-    return None
-
-def find_slot_range(time,weather,species,sp_slots):
-    """Find slot range of a species for a spawner"""
-    values = find_slots(time,weather,sp_slots)
-    pokemon = list(values.keys())
-    slot_values = list(values.values())
-    if not species in pokemon:
-        return 0,0,0
-    start = sum(slot_values[:pokemon.index(species)])
-    end = start + values[species]
-    return start,end,sum(slot_values)
-
-def next_filtered(group_id,
-                  rolls,
-                  guaranteed_ivs,
-                  init_spawn,
-                  poke_filter,
-                  stopping_point=50000):
+def next_filtered(group_id, rolls, guaranteed_ivs, init_spawn, poke_filter, stopping_point=50000):
     """Find the next advance that matches poke_filter for a spawner"""
     # pylint: disable=too-many-locals,too-many-arguments
     generator_seed = reader.read_pointer_int(f"{SPAWNER_PTR}"\
@@ -266,7 +234,7 @@ def check_possible():
             sp_slots = \
                 json.load(slot_file)[marker['name']]
         minimum, maximum, total \
-            = find_slot_range(request.json["filter"]["timeSelect"],
+            = pla.find_slot_range(request.json["filter"]["timeSelect"],
                               request.json["filter"]["weatherSelect"],
                               request.json["filter"]["speciesSelect"],
                               sp_slots)
@@ -298,7 +266,7 @@ def read_seed():
     slot = rng.next() / (2**64) * request.json['filter']['slotTotal']
     fixed_seed = rng.next()
     encryption_constant,pid,ivs,ability,gender,nature,shiny = pla.generate_from_seed(fixed_seed, request.json['rolls'], request.json['ivs'])
-    species = slot_to_pokemon(find_slots(request.json["filter"]["timeSelect"],
+    species = pla.slot_to_pokemon(pla.find_slots(request.json["filter"]["timeSelect"],
                                          request.json["filter"]["weatherSelect"],
                                          sp_slots),slot)
 
@@ -313,11 +281,12 @@ def read_seed():
         request.json['filter']['minSlotFilter'], \
         request.json['filter']['maxSlotFilter'], \
         request.json['filter']['slotTotal'] \
-            = find_slot_range(request.json["filter"]["timeSelect"],
+            = pla.find_slot_range(request.json["filter"]["timeSelect"],
                               request.json["filter"]["weatherSelect"],
                               request.json["filter"]["speciesSelect"],
                               sp_slots)
         request.json['filter']['slotFilterCheck'] = True
+
     adv,slot,encryption_constant,pid,ivs,ability,gender,nature,shiny \
         = next_filtered(group_id,
                         request.json['rolls'],
@@ -333,7 +302,7 @@ def read_seed():
     else:
         display += f"Next Filtered: {adv} <br>"
 
-    species = slot_to_pokemon(find_slots(request.json["filter"]["timeSelect"],
+    species = pla.slot_to_pokemon(pla.find_slots(request.json["filter"]["timeSelect"],
                                          request.json["filter"]["weatherSelect"],
                                          sp_slots),slot)
     display += f"Species: {species}<br>" \
@@ -408,7 +377,7 @@ def check_near():
             poke_filter['minSlotFilter'], \
             poke_filter['maxSlotFilter'], \
             poke_filter['slotTotal'] \
-                = find_slot_range(time,
+                = pla.find_slot_range(time,
                                 weather,
                                 species,
                                 sp_slots)
