@@ -79,7 +79,18 @@
                     PLA-Live-Map
                     <span class="sidebar-close"><i class="fa fa-caret-left"></i></span>
                 </h1><br>
-                <button onclick="window.location.href='../'">Pick Another Map</button><br>
+
+                <label for="locationSelect">Pick Another Map:</label>
+                <select id="locationSelect" onChange="selectMap()"">
+                    <option>Select Map...</option>
+                    <option value="obsidianfieldlands">Obsidian Fieldlands</option>
+                    <option value="crimsonmirelands">Crimson Mirelands</option>
+                    <option value="cobaltcoastlands">Cobalt Coastlands</option>
+                    <option value="coronethighlands">Coronet Highlands</option>
+                    <option value="alabastericelands">Alabaster Icelands</option>
+                </select>
+                <br>
+
                 <button onclick=updatePositions()>Update Active Spawns</button><br>
                 <button onclick=checkNearShinies()>Check Near Filtered</button><br>
                 <button onclick=trackPlayer() id="trackPlayerButton">Track Player Position</button><br>
@@ -582,6 +593,10 @@
         }
         function teleportPopup() {
             teleport(popupCoordinates);
+        }
+
+        function selectMap() {
+            window.location.href=`/map/${document.getElementById("locationSelect").value}`;
         }
 
         function saveIntToStorage(id, value) {
