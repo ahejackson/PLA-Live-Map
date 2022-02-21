@@ -1,10 +1,9 @@
 """Flask application to display live memory information from
    PLA onto a map"""
 import json
-import struct
 import requests
 from flask import Flask, render_template, request
-import nxreader
+from switch import Switch
 from pa8 import Pa8
 import pla
 from xoroshiro import XOROSHIRO
@@ -13,11 +12,7 @@ with open("./static/resources/text_natures.txt",encoding="utf-8") as text_nature
     NATURES = text_natures.read().split("\n")
 with open("./static/resources/text_species.txt",encoding="utf-8") as text_species:
     SPECIES = text_species.read().split("\n")
-PLAYER_LOCATION_PTR = "[[[[[[main+42B3558]+88]+90]+1F0]+18]+80]+90"
-SPAWNER_PTR = "[[main+4268ee0]+330]"
-PARTY_PTR = "[[[main+4269000]+d0]+58]"
-WILD_PTR = "[[[[main+4268f00]+b0]+e0]+d0]"
-OUTBREAK_PTR = "[[[[main+427C470]+2B0]+58]+18]"
+
 CUSTOM_MARKERS = {
     "obsidianfieldlands": {
         "camp": {
@@ -75,7 +70,7 @@ with open("config.json","r",encoding="utf-8") as config:
     IP_ADDRESS = json.load(config)["IP"]
 
 app = Flask(__name__)
-reader = nxreader.NXReader(IP_ADDRESS)
+nswitch = Switch(IP_ADDRESS)
 
 @app.route("/")
 def root():
@@ -99,9 +94,25 @@ def load_map(name):
 def next_filtered(group_id, rolls, guaranteed_ivs, init_spawn, poke_filter, stopping_point=50000):
     """Find the next advance that matches poke_filter for a spawner"""
     # pylint: disable=too-many-locals,too-many-arguments
-    generator_seed = reader.read_pointer_int(f"{SPAWNER_PTR}"\
-                                             f"+{0x70+group_id*0x440+0x20:X}",8)
+    generator_seed = nswitch.read_generator_seed(group_id)
     return pla.next_filtered(generator_seed, rolls, guaranteed_ivs, init_spawn, poke_filter, stopping_point)
+
+def show_battle_pokemon(index, pkm):
+    if pkm is None or not pkm.is_valid:
+        return ""
+
+    pokemon_name = f"{SPECIES[pkm.species]}" \
+                       f"{('-' + str(pkm.form_index)) if pkm.form_index > 0 else ''} " \
+                       f"{'' if pkm.shiny_type == 0 else '⋆' if pkm.shiny_type == 1 else '◇'}"
+    pokemon_info = f"EC: {pkm.encryption_constant:08X}<br>" \
+                       f"PID: {pkm.pid:08X}<br>" \
+                       f"Nature: {NATURES[pkm.nature]}<br>" \
+                       f"Ability: {pkm.ability_string}<br>" \
+                       f"IVs: {'/'.join(str(iv) for iv in pkm.ivs)}"
+
+    return f"<button type=\"button\" class=\"collapsible\" data-for=\"battle{index}\" onclick=collapsibleOnClick()>" \
+           f"{index+1} {pokemon_name}</button>" \
+           f"<div class=\"info\" id=\"battle{index}\">{pokemon_info}</div><br>"
 
 def show_outbreak(outbreak):
     return "<br>".join(show_outbreak_pokemon(*pokemon) for pokemon in outbreak)
@@ -139,7 +150,8 @@ def show_mass_outbreak_search_passive(group_seed, rolls, spawns, move_limit, pok
     if len(results["info"]) == 0:
         return "<b>No paths found</b>"
     
-    return '<br>'.join(f"<b>Paths:<br>{show_path(results['paths'][seed])}<br></b>{show_outbreak_pokemon(*pokemon)}<br>" for seed, pokemon in results["info"].items())
+    return '<br>'.join(f"<b>Paths:<br>{show_path(results['paths'][seed])}<br></b>" \
+                         f"{show_outbreak_pokemon(*pokemon)}<br>" for seed, pokemon in results["info"].items())
 
 def show_mass_outbreak_search_aggressive(group_seed, rolls, spawns, poke_filter):
     """Generate all the pokemon of an outbreak based on a provided aggressive path"""
@@ -151,80 +163,85 @@ def show_mass_outbreak_search_aggressive(group_seed, rolls, spawns, poke_filter)
 @app.route('/read-battle', methods=['GET'])
 def read_battle():
     """Read all battle pokemon and return the information as an html formatted string"""
+    if not nswitch.is_connected():
+        return ""
+    
     display = ""
-    party_count = reader.read_pointer_int(f"{PARTY_PTR}+88",1)
-    wild_count = reader.read_pointer_int(f"{WILD_PTR}+1a0",1) \
-               - party_count
+    party_count = nswitch.read_party_count()
+    wild_count = nswitch.read_wild_count(party_count)
+    
     if wild_count > 30:
         wild_count = 0
+    
     for i in range(wild_count):
-        pkm = Pa8(reader.read_pointer(f"{WILD_PTR}+{0xb0+8*(i+party_count):X}"\
-                                       "]+70]+60]+98]+10]",Pa8.STOREDSIZE))
-        pokemon_name = f"{SPECIES[pkm.species]}" \
-                       f"{('-' + str(pkm.form_index)) if pkm.form_index > 0 else ''} " \
-                       f"{'' if pkm.shiny_type == 0 else '⋆' if pkm.shiny_type == 1 else '◇'}"
-        pokemon_info = f"EC: {pkm.encryption_constant:08X}<br>" \
-                       f"PID: {pkm.pid:08X}<br>" \
-                       f"Nature: {NATURES[pkm.nature]}<br>" \
-                       f"Ability: {pkm.ability_string}<br>" \
-                       f"IVs: {'/'.join(str(iv) for iv in pkm.ivs)}"
+        pkm = nswitch.read_pa8(party_count + i)
+
         if pkm.is_valid:
-            display += f"<button type=\"button\" class=\"collapsible\" " \
-                       f"data-for=\"battle{i}\" onclick=collapsibleOnClick()>{i+1} " \
-                       f"{pokemon_name}</button>" \
-                       f"<div class=\"info\" id=\"battle{i}\">{pokemon_info}</div><br>"
+            display += show_battle_pokemon(i, pkm)
     return display
 
 @app.route('/read-mass-outbreak', methods=['POST'])
 def read_mass_outbreak():
     """Read current mass outbreak information and predict next pokemon that passes filter"""
+
+    group_id = find_group_id(request.json['name'])
+    if group_id == -1:
+        print("No mass outbreak found")
+        return json.dumps(["No mass outbreak found", "No mass outbreak found"])
+
+    print(f"Found group_id {group_id}")
+    generator_seed = nswitch.read_generator_seed(group_id)
+    group_seed = pla.get_group_seed(generator_seed)
+
+    rolls = request.json['rolls']
+    spawns = request.json['spawns']
+    filter = request.json['filter']
+
+    if spawns == -1:
+        spawns = find_spawn_count()
+        print(f"Spawns: {spawns}")
+
+    if request.json['aggressivePath']:
+        # should display multiple aggressive paths like whats done with passive
+        search_results = show_mass_outbreak_search_aggressive(group_seed, rolls, spawns, filter)
+        display = ["", f"Group Seed: {group_seed:X}<br>" + search_results]
+
+    elif request.json['passivePath']:
+        print(group_seed, rolls, spawns, request.json['passiveMoveLimit'])
+        search_results = show_mass_outbreak_search_passive(group_seed,  rolls, spawns, request.json['passiveMoveLimit'], filter)
+        display = ["", f"Group Seed: {group_seed:X}<br>" + search_results]
+
+    else:
+        main_rng = XOROSHIRO(group_seed)
+        mass_outbreak = show_mass_outbreak(main_rng,  rolls, spawns, filter)
+        next_filtered = show_next_filtered_mass_outbreak(main_rng, rolls, spawns, filter)
+        display = [f"Group Seed: {group_seed:X}<br>{mass_outbreak}", next_filtered]
+
+    return json.dumps(display)
+
+def find_group_id(map_name):
     url = "https://raw.githubusercontent.com/Lincoln-LM/JS-Finder/main/Resources/" \
-         f"pla_spawners/jsons/{request.json['name']}.json"
+         f"pla_spawners/jsons/{map_name}.json"
     minimum = int(list(json.loads(requests.get(url).text).keys())[-1])-15
     group_id = minimum+30
     group_seed = 0
     while group_seed == 0 and group_id != minimum:
         group_id -= 1
         print(f"Finding group_id {minimum-group_id+30}/30")
-        group_seed = reader.read_pointer_int(f"{SPAWNER_PTR}+{0x70+group_id*0x440+0x408:X}",8)
+        group_seed = nswitch.read_group_seed(group_id)
     if group_id == minimum:
-        print("No mass outbreak found")
-        return json.dumps(["No mass outbreak found","No mass outbreak found"])
-    print(f"Found group_id {group_id}")
+        return -1
+    return group_id
 
-    generator_seed = reader.read_pointer_int(f"{SPAWNER_PTR}+{0x70+group_id*0x440+0x20:X}",8)
-    group_seed = (generator_seed - 0x82A2B175229D6A5B) & 0xFFFFFFFFFFFFFFFF
-
-    if request.json['spawns'] == -1:
-        for i in range(4):
-            spawns = reader.read_pointer_int(f"{OUTBREAK_PTR}+{0x60+i*0x50:X}",1)
-            if 10 <= spawns <= 15:
-                request.json['spawns'] = spawns
-                break
-        print(f"Spawns: {request.json['spawns']}")
-
-    if request.json['aggressivePath']:
-        # should display multiple aggressive paths like whats done with passive
-        search_results = show_mass_outbreak_search_aggressive(group_seed, request.json['rolls'], request.json['spawns'], request.json['filter'])
-        display = ["", f"Group Seed: {group_seed:X}<br>" + search_results]
-
-    elif request.json['passivePath']:
-        print(group_seed,request.json['rolls'], request.json['spawns'], request.json['passiveMoveLimit'], request.json['filter'])
-        search_results = show_mass_outbreak_search_passive(group_seed,  request.json['rolls'], request.json['spawns'], request.json['passiveMoveLimit'], request.json['filter'])
-        display = ["", f"Group Seed: {group_seed:X}<br>" + search_results]
-
-    else:
-        main_rng = XOROSHIRO(group_seed)
-        mass_outbreak = show_mass_outbreak(main_rng,  request.json['rolls'], request.json['spawns'], request.json['filter'])
-        next_filtered = show_next_filtered_mass_outbreak(main_rng, request.json['rolls'], request.json['spawns'], request.json['filter'])
-        display = [f"Group Seed: {group_seed:X}<br>{mass_outbreak}", next_filtered]
-
-    return json.dumps(display)
+def find_spawn_count():
+    for i in range(4):
+        spawns = nswitch.read_outbreak_spawn_count(i)
+        if 10 <= spawns <= 15:
+            return spawns
 
 @app.route('/check-possible', methods=['POST'])
 def check_possible():
     """Check spawners that can spawn a given species"""
-    print(request.json)
     url = "https://raw.githubusercontent.com/Lincoln-LM/JS-Finder/main/Resources/" \
          f"pla_spawners/jsons/{request.json['name']}.json"
     markers = json.loads(requests.get(url).text)
@@ -251,17 +268,18 @@ def read_seed():
     url = "https://raw.githubusercontent.com/Lincoln-LM/JS-Finder/main/Resources/" \
             f"pla_spawners/jsons/{request.json['map']}.json"
     with open(f"./static/resources/{request.json['map']}.json",encoding="utf-8") as slot_file:
-        sp_slots = \
-            json.load(slot_file)[json.loads(requests.get(url).text)[str(group_id)]['name']]
-    generator_seed = reader.read_pointer_int(f"{SPAWNER_PTR}"\
-                                             f"+{0x70+group_id*0x440+0x20:X}",8)
-    group_seed = (generator_seed - 0x82A2B175229D6A5B) & 0xFFFFFFFFFFFFFFFF
+        sp_slots = json.load(slot_file)[json.loads(requests.get(url).text)[str(group_id)]['name']]
+    
+    generator_seed = nswitch.read_generator_seed(group_id)
+    group_seed = pla.get_group_seed(generator_seed)
     rng = XOROSHIRO(group_seed)
+
     if not request.json['initSpawn']:
         # advance once
         rng.next() # spawner 0
         rng.next() # spawner 1
         rng.reseed(rng.next()) # reseed group rng
+    
     rng.reseed(rng.next()) # use spawner 0 to reseed
     slot = rng.next() / (2**64) * request.json['filter']['slotTotal']
     fixed_seed = rng.next()
@@ -317,40 +335,30 @@ def teleport():
     """Teleport the player to provided coordinates"""
     coordinates = request.json['coords']
     print(f"Teleporting to {coordinates}")
-    position_bytes = struct.pack('fff', *coordinates)
-    reader.write_pointer(PLAYER_LOCATION_PTR,f"{int.from_bytes(position_bytes,'big'):024X}")
+    nswitch.teleport_player(coordinates)
     return ""
 
 @app.route('/read-coords', methods=['GET'])
 def read_coords():
     """Read the players current position"""
-    pos = struct.unpack('fff', reader.read_pointer(PLAYER_LOCATION_PTR,12))
-    coords = {
-        "x":pos[0],
-        "y":pos[1],
-        "z":pos[2]
-    }
-    return json.dumps(coords)
+    return json.dumps(nswitch.read_player_coordinates())
 
 @app.route('/update-positions', methods=['GET'])
 def update_positions():
     """Scan all active spawns"""
     spawns = {}
-    size = reader.read_pointer_int(f"{SPAWNER_PTR}+18",4)
-    size = int(size//0x40 - 1)
+    size = nswitch.read_map_spawn_count()
     print(f"Checking up to index {size}")
-    for index in range(0,size):
-        if index % int(size//100) == 0:
-            print(f"{index/size*100}% done scanning")
-        position_bytes = reader.read_pointer(f"{SPAWNER_PTR}+{0x70+index*0x40:X}",12)
-        seed = reader.read_pointer_int(f"{SPAWNER_PTR}+{0x90+index*0x40:X}",12)
-        pos = struct.unpack('fff', position_bytes)
-        if not (seed == 0 or pos[0] < 1 or pos[1] < 1 or pos[2] < 1):
-            print(f"Active: spawner_id {index} {pos[0]},{pos[1]},{pos[2]} {seed:X}")
-            spawns[str(index)] = {"x":pos[0],
-                                  "y":pos[1],
-                                  "z":pos[2],
-                                  "seed":seed}
+
+    for index in range(0, size):
+        if index % int(size//10) == 0:
+            print(f"{index/size*100:.2f}% done scanning")
+        
+        spawn = nswitch.read_map_spawn(index)
+        if spawn:
+            print(f"Active: spawner_id {index} {spawn['x']},{spawn['y']},{spawn['z']} {spawn['seed']}")
+            spawns[str(index)] = spawn
+            
     return json.dumps(spawns)
 
 @app.route('/check-near', methods=['POST'])

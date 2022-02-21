@@ -1,6 +1,9 @@
 from math import factorial
 from xoroshiro import XOROSHIRO
 
+def get_group_seed(generator_seed):
+    return (generator_seed - 0x82A2B175229D6A5B) & 0xFFFFFFFFFFFFFFFF
+
 def slot_to_pokemon(values, slot):
     """Compare slot to list of slots to find pokemon"""
     for pokemon,slot_value in values.items():
