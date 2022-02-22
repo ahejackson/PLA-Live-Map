@@ -1,0 +1,42 @@
+<h1 class="sidebar-header">
+    Filter
+    <span class="sidebar-close"><i class="fa fa-caret-left"></i></span>
+</h1><br>
+<label for="shinyFilterCheck">Shiny Only:</label>
+<input type="checkbox" id="shinyFilterCheck" checked=true><br>
+<label for="alphaFilterCheck">Alpha Filter:</label>
+<input type="checkbox" id="alphaFilterCheck" onclick="toggleSlotFilter()"><br>
+<label for="slotFilterCheck">Encounter Slot Filter:</label>
+<input type="checkbox" id="slotFilterCheck" onclick="toggleSlotFilter()"><br>
+
+<label for="slotTotal">Slot Total:</label>
+<input style="width:30%" type="number" id="slotTotal" value=101><br>
+<label for="minSlotFilter">Slot:</label>
+<input class="unlocked" style="width:30%" type="number" id="minSlotFilter" value=0>
+<b>~</b>
+<input class="unlocked" style="width:30%" type="number" id="maxSlotFilter" value=101><br>
+<label for="filterSpeciesCheck">Filter by Species:</label>
+<input type="checkbox" id="filterSpeciesCheck" onclick="toggleSlotFilter()" onchange="speciesSelectChanged()"><br>
+<label for="timeSelect">Time:</label>
+<select id="timeSelect" onchange="speciesSelectChanged()">
+    <option value="Dawn">Dawn</option>
+    <option value="Day">Day</option>
+    <option value="Dusk">Dusk</option>
+    <option value="Night">Night</option>
+</select><br>
+<label for="weatherSelect">Weather:</label>
+<select id="weatherSelect" onchange="speciesSelectChanged()">
+    <option value="None">None</option>
+    <option value="Sunny">Sunny</option>
+    <option value="Cloudy">Cloudy</option>
+    <option value="Rain">Rain</option>
+    <option value="Snow">Snow</option>
+    <option value="Drought">Drought</option>
+    <option value="Fog">Fog</option>
+    <option value="Rainstorm">Rainstorm</option>
+    <option value="Snowstorm">Snowstorm</option>
+</select><br>
+<label for="speciesSelect">Species:</label>
+<select id="speciesSelect" onchange="speciesSelectChanged()"></select><br>
+<label for="possibleSpawners">Possible Spawners for Species:</label><br>
+<div id="possibleSpawners"></div>

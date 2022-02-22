@@ -1,0 +1,86 @@
+<h1 class="sidebar-header">
+    Mass Outbreak Information
+    <span class="sidebar-close"><i class="fa fa-caret-left"></i></span>
+</h1>
+
+<div class="sidebar-panel">
+    <h2 class="sidebar-subtitle">
+        Search Options
+    </h2>
+
+    <div class="control">
+        <label for="massOutbreakRolls">Shiny Rolls</label>
+        <input type="number" id="massOutbreakRolls" value="26">
+    </div>
+
+    <div class="control">
+        <label for="outbreakShinyFilter">Shiny Only</label>
+        <input type="checkbox" id="outbreakShinyFilter">
+    </div>
+
+    <div class="control">
+        <label for="outbreakAlphaFilter">Alphas Only</label>
+        <input type="checkbox" id="outbreakAlphaFilter">
+    </div>
+
+    <div class="control">
+        <label for="readSpawns">Read Spawn Count:</label>
+        <input type="checkbox" id="readSpawns" onchange="updatePath()" checked>
+    </div>
+
+    <div class="control">
+        <label for="massOutbreakSpawns" id="massOutbreakSpawnsLabel">Total Spawns:</label>
+        <input type="number" id="massOutbreakSpawns" value="10">
+    </div>
+</div>
+
+<div class="sidebar-panel">
+    <h2 class="sidebar-subtitle">
+        Search Type
+    </h2>
+
+    <div class="control">
+        <label for="noPath">Basic Pathfinding</label>
+        <input type="radio" id="noPath" name="pathfinding" value="noPath" onchange="updatePath()" checked>
+    </div>
+
+    <div class="control">
+        <label for="aggressivePath">Aggressive Pathfinding</label>
+        <input type="radio" id="aggressivePath" name="pathfinding" value="aggressivePath" onchange="updatePath()">
+    </div>
+
+    <div class="control">
+        <label for="passivePath">Passive Pathfinding</label>
+        <input type="radio" id="passivePath" name="pathfinding" value="passivePath" onchange="updatePath()">
+    </div>
+
+    <div class="control" id="passiveMoveLimitDiv">
+        <label for="passiveMoveLimit" id="passiveMoveLimitLabel">Max Jubilife Trips</label>
+        <input type="number" id="passiveMoveLimit" value="10">
+    </div>
+</div>
+
+<div class="control">
+    <button onclick=loadMassOutbreakInfo()>Update Mass Outbreak Info</button>
+
+    <div id="massOutbreakSeed">
+
+    </div>
+</div>
+
+
+<button type="button" class="collapsible" data-for="currentMassOutbreak" id="currentMassOutbreakButton">
+    Current Mass Outbreak
+</button>
+
+<div class="info" id="currentMassOutbreak">
+    <b>No info present</b>
+</div>
+
+<button type="button" class="collapsible" data-for="filteredMassOutbreak" id="filteredMassOutbreakButton">
+    Next Filtered Mass Outbreak
+</button>
+
+<div class="info" id="filteredMassOutbreak">
+    <b>No info present</b>
+</div>

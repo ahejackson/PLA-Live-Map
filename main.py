@@ -192,6 +192,7 @@ def read_mass_outbreak():
     print(f"Found group_id {group_id}")
     generator_seed = nswitch.read_generator_seed(group_id)
     group_seed = pla.get_group_seed(generator_seed)
+    print(f"Group Seed: {group_seed}")
 
     rolls = request.json['rolls']
     spawns = request.json['spawns']
@@ -200,24 +201,27 @@ def read_mass_outbreak():
     if spawns == -1:
         spawns = find_spawn_count()
         print(f"Spawns: {spawns}")
+   
+    results = {
+        'seed': f"{group_seed:X}",
+        'spawns': spawns,
+        'current': '',
+        'filtered': '',
+    }
 
     if request.json['aggressivePath']:
         # should display multiple aggressive paths like whats done with passive
-        search_results = show_mass_outbreak_search_aggressive(group_seed, rolls, spawns, filter)
-        display = ["", f"Group Seed: {group_seed:X}<br>" + search_results]
+        results['filtered'] = show_mass_outbreak_search_aggressive(group_seed, rolls, spawns, filter)
 
     elif request.json['passivePath']:
-        print(group_seed, rolls, spawns, request.json['passiveMoveLimit'])
-        search_results = show_mass_outbreak_search_passive(group_seed,  rolls, spawns, request.json['passiveMoveLimit'], filter)
-        display = ["", f"Group Seed: {group_seed:X}<br>" + search_results]
+        results['filtered'] = show_mass_outbreak_search_passive(group_seed,  rolls, spawns, request.json['passiveMoveLimit'], filter)
 
     else:
         main_rng = XOROSHIRO(group_seed)
-        mass_outbreak = show_mass_outbreak(main_rng,  rolls, spawns, filter)
-        next_filtered = show_next_filtered_mass_outbreak(main_rng, rolls, spawns, filter)
-        display = [f"Group Seed: {group_seed:X}<br>{mass_outbreak}", next_filtered]
+        results['current'] = show_mass_outbreak(main_rng,  rolls, spawns, filter)
+        results['filtered'] = show_next_filtered_mass_outbreak(main_rng, rolls, spawns, filter)
 
-    return json.dumps(display)
+    return json.dumps(results)
 
 def find_group_id(map_name):
     url = "https://raw.githubusercontent.com/Lincoln-LM/JS-Finder/main/Resources/" \

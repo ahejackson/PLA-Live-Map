@@ -60,7 +60,6 @@ def generate_from_seed(seed, rolls, guaranteed_ivs):
     nature = rng.rand(25)
     return encryption_constant, pid, ivs, ability, gender, nature, shiny
 
-
 def next_filtered(generator_seed, rolls, guaranteed_ivs, init_spawn, poke_filter, stopping_point=50000):
     """Find the next advance that matches poke_filter for a spawner"""
     # pylint: disable=too-many-locals,too-many-arguments
@@ -93,7 +92,7 @@ def next_filtered(generator_seed, rolls, guaranteed_ivs, init_spawn, poke_filter
             (poke_filter["shinyFilterCheck"] and not shiny)
             or poke_filter["slotFilterCheck"]
             and not (poke_filter["minSlotFilter"] <= slot < poke_filter["maxSlotFilter"])
-            or poke_filter["outbreakAlphaFilter"]
+            or poke_filter["alphaFilterCheck"]
             and not 100 <= slot < 101
         )
 
@@ -102,6 +101,9 @@ def next_filtered(generator_seed, rolls, guaranteed_ivs, init_spawn, poke_filter
         main_rng.reseed(main_rng.next())
 
     return adv, slot, encryption_constant, pid, ivs, ability, gender, nature, shiny
+
+def outbreak_filter(poke_filter, ivs, ability, gender, nature, shiny, alpha):
+    return (poke_filter['outbreakShinyFilter'] and not shiny) or (poke_filter['outbreakAlphaFilter'] and not alpha)
 
 def generate_mass_outbreak(main_rng, rolls, spawns, poke_filter):
     """Generate the current set of a mass outbreak and return a list of results along with
@@ -122,8 +124,7 @@ def generate_mass_outbreak(main_rng, rolls, spawns, poke_filter):
         encryption_constant,pid,ivs,ability,gender,nature,shiny = generate_from_seed(fixed_seed,rolls,3 if alpha else 0)
         results.append((f"Init Spawn {init_spawn}",encryption_constant,pid,ivs,ability,gender,nature,shiny,alpha))
 
-        filtered = ((poke_filter['shinyFilterCheck'] and not shiny)
-                  or poke_filter['outbreakAlphaFilter'] and not 100 <= slot < 101)
+        filtered = outbreak_filter(poke_filter, ivs, ability, gender, nature, shiny, alpha)
         filtered_present |= not filtered
     
     group_seed = main_rng.next()
@@ -141,8 +142,7 @@ def generate_mass_outbreak(main_rng, rolls, spawns, poke_filter):
         encryption_constant,pid,ivs,ability,gender,nature,shiny = generate_from_seed(fixed_seed,rolls,3 if alpha else 0)
         results.append((f"Respawn {respawn}",encryption_constant,pid,ivs,ability,gender,nature,shiny,alpha))
 
-        filtered = ((poke_filter['shinyFilterCheck'] and not shiny)
-                  or poke_filter['outbreakAlphaFilter'] and not 100 <= slot < 101)
+        filtered = outbreak_filter(poke_filter, ivs, ability, gender, nature, shiny, alpha)
         filtered_present |= not filtered
     
     return results, filtered_present
@@ -186,8 +186,7 @@ def generate_mass_outbreak_passive_path(group_seed, rolls, steps, total_spawns, 
             alpha = slot >= 100
             fixed_seed = spawner_rng.next()
             encryption_constant,pid,ivs,ability,gender,nature,shiny = generate_from_seed(fixed_seed,rolls,3 if alpha else 0)
-            filtered = ((poke_filter['shinyFilterCheck'] and not shiny)
-                      or poke_filter['outbreakAlphaFilter'] and not alpha)
+            filtered = outbreak_filter(poke_filter, ivs, ability, gender, nature, shiny, alpha)
             effective_path = steps[:step_i] + [max(0,pokemon-3)]
             
             if not filtered:
@@ -241,8 +240,7 @@ def generate_mass_outbreak_aggressive_path(group_seed, rolls, steps, poke_filter
         alpha = slot >= 100
         fixed_seed = fixed_rng.next()
         encryption_constant,pid,ivs,ability,gender,nature,shiny = generate_from_seed(fixed_seed, rolls, 3 if alpha else 0)
-        filtered = ((poke_filter['shinyFilterCheck'] and not shiny)
-                  or poke_filter['outbreakAlphaFilter'] and not alpha)
+        filtered = outbreak_filter(poke_filter, ivs, ability, gender, nature, shiny, alpha)
 
         if not filtered and not fixed_seed in uniques:
             uniques.add(fixed_seed)
@@ -259,8 +257,7 @@ def generate_mass_outbreak_aggressive_path(group_seed, rolls, steps, poke_filter
             alpha = slot >= 100
             fixed_seed = fixed_rng.next()
             encryption_constant,pid,ivs,ability,gender,nature,shiny = generate_from_seed(fixed_seed, rolls, 3 if alpha else 0)
-            filtered = ((poke_filter['shinyFilterCheck'] and not shiny)
-                      or poke_filter['outbreakAlphaFilter'] and not alpha)
+            filtered = outbreak_filter(poke_filter, ivs, ability, gender, nature, shiny, alpha)
                       
             if not filtered and not fixed_seed in uniques:
                 uniques.add(fixed_seed)

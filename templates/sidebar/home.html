@@ -1,0 +1,28 @@
+<h1 class="sidebar-header">
+    PLA-Live-Map
+    <span class="sidebar-close"><i class="fa fa-caret-left"></i></span>
+</h1><br>
+
+<label for="locationSelect">Pick Another Map:</label>
+<select id="locationSelect" onchange="selectMap()"">
+    <option>Select Map...</option>
+    <option value="obsidianfieldlands">Obsidian Fieldlands</option>
+    <option value="crimsonmirelands">Crimson Mirelands</option>
+    <option value="cobaltcoastlands">Cobalt Coastlands</option>
+    <option value="coronethighlands">Coronet Highlands</option>
+    <option value="alabastericelands">Alabaster Icelands</option>
+</select>
+<br>
+
+<button onclick=updatePositions()>Update Active Spawns</button><br>
+<button onclick=checkNearShinies()>Check Near Filtered</button><br>
+<button onclick=trackPlayer() id="trackPlayerButton">Track Player Position</button><br>
+<button onclick=placeTeleport() id="placeTeleportButton">Teleport</button><br>
+<label for="y">Teleport Height:</label>
+<input type="number" id="y" value=50><br>
+<label for="rolls">Shiny Rolls:</label>
+<input type="number" id="rolls" value=1><br>
+<label for="thresh">Near Filtered Limit</label>
+<input type="number" id="thresh" value=50><br>
+<label for="initialSpawn">Initial Spawn</label>
+<input type="checkbox" id="initSpawn">
